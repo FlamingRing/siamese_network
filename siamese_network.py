@@ -303,9 +303,9 @@ def train():
     for cluster_label, test_label in zip(kmeans.labels_, y_test_np):           # cluster_label：クラスタラベルすなわちその画像の予測の結果，test_label：テスト画像ラベル
         if cluster_label not in counts.keys():
             counts[cluster_label] = [0] * 3107                                       # 「<cluster_label>:[0,0,0,0,0,0,0,0,0,0]」をcountsに追加（初期化）
-        counts[cluster_label][test_label] += 1
+        counts[cluster_label][test_label] += 1             #　各クラスターで各種類（ラベル、真実）のサンプルの数を記録
 
-    mapping = {}
+    mapping = {}      # cluster index -> class index
     for cluster_label in range(3107):
         mapping[cluster_label] = counts[cluster_label].index(max(counts[cluster_label])) # クラスターリングされたクラスターで、一番多いラベルのインデックス
         #   if cluster_label in counts.keys():
