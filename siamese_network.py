@@ -18,6 +18,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image 
 import os
+
+import torch.nn as nn
+import copy
+from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
+
 # Siamese Network用MNISTデータセットクラス
 class SiameseDataset(Dataset):
     def __init__(self, img_dir):
@@ -99,7 +105,8 @@ class TestDataset(Dataset):
 
 # STEP 4
 
-import torch.nn as nn
+# import torch.nn as nn
+
 # Siamse Networkモデルクラス
 class SiameseMnistModel(nn.Module):
     def __init__(self):
@@ -215,16 +222,16 @@ def train(model_type):
 
 
     # STEP 7
-    import copy
-    import matplotlib.pyplot as plt
-
+    # import copy
+    # import matplotlib.pyplot as plt
+    
     # モデル学習
     total_epochs = 100                                                       # 学習回数
     losses = []                                                       # 表示用損失値配列
 
     model.train()                                                     # 学習モード
     for epoch in range(total_epochs): 
-        print(f"epoch={epoch}")
+        print(f"epoch={epoch+1}")
         nan_count = 0
         normal_count = 0
 
@@ -286,8 +293,8 @@ def train(model_type):
 
 
     # STEP 9
-    from sklearn.manifold import TSNE
-
+    # from sklearn.manifold import TSNE
+    
     def plot_tsne(x, y, colormap=plt.cm.Paired):
         plt.figure(figsize=(13, 10))
         plt.clf()
@@ -310,7 +317,7 @@ def train(model_type):
 
 
     # STEP 10
-    from sklearn.cluster import KMeans
+    # from sklearn.cluster import KMeans
 
     # k-meansによるクラスタリング
     kmeans = KMeans(n_clusters=3107, n_init=10)                                             # クラスタ数は3107で指定します
@@ -335,11 +342,16 @@ def train(model_type):
     mapped_cluster_label = np.array([mapping[cluster_label] for cluster_label in kmeans.labels_])
     accuracy = sum(mapped_cluster_label == y_test_np) / len(y_test_np)
     print(accuracy)
-    torch.save(model.state_dict(), 'checkpoints/model2.pth')
+    torch.save(model.state_dict(), 'checkpoints/net2.pth')
 
-def trained_model_initialization():
-    model = SiameseMnistModel().to(device)
-    model.load_state_dict(torch.load("checkpoints/model2.pth"))
+def trained_model_initialization(model_type):
+    if model_type == "net1":
+        model = SiameseMnistModel().to(device)                # GPUを使用するには「.to(device)」が必要
+    elif model_type == "net2":
+        model = SiameseNet12().to(device)
+    else:
+        raise RuntimeError("model not correctly defined")
+    model.load_state_dict(torch.load("checkpoints/net2.pth"))
     model.eval()
     transform = transforms.Compose([transforms.Resize((64, 64)),
                                                     transforms.Grayscale(), transforms.ToTensor()])
@@ -356,8 +368,8 @@ def exam(utf8code1, utf8code2):
     print(f"distance between img1 and img2 is {get_distance(output1, output2)}")
     print(f"distance between img1 and img3 is {get_distance(output1, output3)}")
 
-def generate_labels(file_name):
-    model, transform = trained_model_initialization()
+def generate_labels(file_name, model_type):
+    model, transform = trained_model_initialization(model_type)
     df = pd.read_csv("characters2.csv")
     output_file = open(file_name, mode="w")
     for idx in range(len(df.index)):
@@ -376,7 +388,7 @@ def generate_labels(file_name):
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", default="train", type=str)
 parser.add_argument("--utf8code", default="", nargs='+')
-parser.add_argument("--model_type", default="net1", type=str)
+parser.add_argument("--model_type", default="net2", type=str)
 parser.add_argument("--file_name", default="label_embedding2.txt", type=str)
 
 args = parser.parse_args()
@@ -385,5 +397,5 @@ if args.mode == "train":
 elif args.mode == "exam":
     exam(args.utf8code[0], args.utf8code[1])
 elif args.mode == "generate_labels":
-    generate_labels(args.file_name)
+    generate_labels(args.file_name, args.model_type)
 

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 X = []
-with open("label_embedding.txt") as f:
+with open("label_embedding2.txt") as f:
     for line in f.readlines():
         X.append([float(num) for num in line.split(" ")])
 X = np.array(X)
@@ -32,4 +32,4 @@ plt.show()
 characters_df = pd.read_csv("characters2.csv")
 output = characters_df[["UTF-8", "字"]]
 output["class_idx"] = df["label"]
-output.to_csv("characters_analysis.csv")
+output.to_csv("characters_analysis2.csv")
