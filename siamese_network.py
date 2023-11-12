@@ -219,11 +219,11 @@ def train(model_type):
     import matplotlib.pyplot as plt
 
     # モデル学習
-    repeat = 100                                                       # 学習回数
+    total_epochs = 100                                                       # 学習回数
     losses = []                                                       # 表示用損失値配列
 
     model.train()                                                     # 学習モード
-    for epoch in range(repeat): 
+    for epoch in range(total_epochs): 
         print(f"epoch={epoch}")
         nan_count = 0
         normal_count = 0
@@ -356,10 +356,10 @@ def exam(utf8code1, utf8code2):
     print(f"distance between img1 and img2 is {get_distance(output1, output2)}")
     print(f"distance between img1 and img3 is {get_distance(output1, output3)}")
 
-def generate_labels():
+def generate_labels(file_name):
     model, transform = trained_model_initialization()
     df = pd.read_csv("characters2.csv")
-    output_file = open("label_embedding.txt", mode="w")
+    output_file = open(file_name, mode="w")
     for idx in range(len(df.index)):
         img_tensor_list = []
         utf8code = df["UTF-8"].iloc[idx]
@@ -377,11 +377,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--mode", default="train", type=str)
 parser.add_argument("--utf8code", default="", nargs='+')
 parser.add_argument("--model_type", default="net1", type=str)
+parser.add_argument("--file_name", default="label_embedding2.txt", type=str)
+
 args = parser.parse_args()
 if args.mode == "train":
-    train()
+    train(args.model_type)
 elif args.mode == "exam":
     exam(args.utf8code[0], args.utf8code[1])
 elif args.mode == "generate_labels":
-    generate_labels()
+    generate_labels(args.file_name)
 
