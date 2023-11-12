@@ -1,9 +1,6 @@
 # reference https://qiita.com/saliton/items/5aa6ead4de4d66e8adf5
 
 import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument("--mode", default="train", type=str)
-parser.add_argument("--utf8code", default="", nargs='+')
 # STEP 1
 import torch
 
@@ -58,20 +55,20 @@ class SiameseDataset(Dataset):
         self.length = len(self.img_name_list)*2
         for idx, img_name in enumerate(self.img_name_list):
             utf8code, font_idx = img_name.split(".")[0].split("_")
-            random_font_indice = np.arange(7)
+            random_font_indice = np.arange(7) # 7 kinds of font are used
             np.random.shuffle(random_font_indice)
             for random_font_index in random_font_indice:
-                if random_font_index == int(font_idx):
+                if random_font_index == int(font_idx): # same image
                     continue
-                else:
+                else: # same character
                     self.pair_index.append([idx, self.img_name_list.index(utf8code+f"_{random_font_index}.png"), 1])
                     break
             random_indice = np.arange(len(self.img_name_list))
             np.random.shuffle(random_indice)
             for random_index in random_indice:
-                if labels[idx] == labels[random_index]:
+                if labels[idx] == labels[random_index]: # same character
                     continue
-                else:
+                else: # different character
                     self.pair_index.append([idx, random_index, 0])
                     break
 
@@ -135,6 +132,22 @@ class SiameseMnistModel(nn.Module):
         return z1, z2
     
 
+class SiameseNet12(SiameseMnistModel):
+    def __init__(self):
+        super(SiameseNet12, self).__init__()
+
+        self.encoder = nn.Sequential(
+            nn.Linear(64*64, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 64),
+            nn.ReLU(),
+            nn.Linear(64, 12),
+            nn.Sigmoid()
+        )
+    
+
 # STEP 5
 
 # 損失関数
@@ -159,7 +172,7 @@ def get_distance(z1, z2):
     distance = torch.sqrt(distance_squared)
     return distance
     
-def train():
+def train(model_type):
     # Siamese Network学習用Dataset，DataLoaderの作成
     batch_size = 1024
     train_dataset = SiameseDataset("images")
@@ -185,7 +198,12 @@ def train():
     from torchsummary import summary
 
     # モデルのインスタンス化
-    model = SiameseMnistModel().to(device)                # GPUを使用するには「.to(device)」が必要
+    if model_type == "net1":
+        model = SiameseMnistModel().to(device)                # GPUを使用するには「.to(device)」が必要
+    elif model_type == "net2":
+        model = SiameseNet12().to(device)
+    else:
+        raise RuntimeError("model not correctly defined")
     print(model.parameters)
     summary(model, input_size=[(1, 64*64), (1, 64*64)])   # 入力が２つあるので（ペア画像だから）input_sizeはリストで複数指定する
 
@@ -354,6 +372,11 @@ def generate_labels():
             output_file.write("\n")
     output_file.close()
 
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--mode", default="train", type=str)
+parser.add_argument("--utf8code", default="", nargs='+')
+parser.add_argument("--model_type", default="net1", type=str)
 args = parser.parse_args()
 if args.mode == "train":
     train()
