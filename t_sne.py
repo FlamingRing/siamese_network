@@ -14,7 +14,7 @@ X = np.array(X)
 # print(X.shape)
 tsne_results = TSNE(n_components=2, learning_rate='auto', init='random', perplexity=15).fit_transform(X)
 df = pd.DataFrame()
-kmeans = KMeans(n_clusters=10).fit(tsne_results)
+kmeans = KMeans(n_clusters=30).fit(tsne_results)
 # print(labels.shape)
 df['tsne-2d-one'] = tsne_results[:,0]
 df['tsne-2d-two'] = tsne_results[:,1]

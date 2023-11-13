@@ -143,16 +143,28 @@ class SiameseNet12(SiameseMnistModel):
     def __init__(self):
         super(SiameseNet12, self).__init__()
 
-        self.encoder = nn.Sequential(
-            nn.Linear(64*64, 1024),
+        self.featrue_extracter = nn.Sequential(
+            nn.Conv2d(1, 10, 2, 2),
+            nn.BatchNorm2d(10),
             nn.ReLU(),
-            nn.Linear(1024, 1024),
+            nn.Conv2d(10, 100, 2, 2),
+            nn.BatchNorm2d(100),
             nn.ReLU(),
-            nn.Linear(1024, 64),
+            nn.Conv2d(100, 1000, 2, 2),
+            nn.BatchNorm2d(1000),
             nn.ReLU(),
-            nn.Linear(64, 12),
-            nn.Sigmoid()
+            nn.AvgPool2d(8, 1),
         )
+        self.encoder = nn.Sequential(
+            nn.Linear(1000, 100),
+            nn.Linear(100, 12),
+            nn.Softmax()
+        )
+
+    def forward_once(self, x):
+        x = self.featrue_extracter(x)
+        z = self.encoder(x.reshape(-1, 1000))
+        return z
     
 
 # STEP 5
@@ -173,6 +185,8 @@ class ContrastiveLoss(nn.Module):
         loss = torch.sum(loss) / z1.size()[0]
         return loss
     
+
+# no batch, for single images
 def get_distance(z1, z2):
     difference = z1 - z2
     distance_squared = torch.sum(torch.pow(difference, 2), 0)
@@ -212,11 +226,11 @@ def train(model_type):
     else:
         raise RuntimeError("model not correctly defined")
     print(model.parameters)
-    summary(model, input_size=[(1, 64*64), (1, 64*64)])   # 入力が２つあるので（ペア画像だから）input_sizeはリストで複数指定する
+    # summary(model, input_size=[(1, 64*64), (1, 64*64)])   # 入力が２つあるので（ペア画像だから）input_sizeはリストで複数指定する
 
     # 最適化関数の定義
     # optimizer = optim.SGD(model.parameters(), lr=0.001)    # パラメータ探索アルゴリズム=確率的勾配降下法(SGD), 学習率lr=0.05
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999))
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999))
     # 損失関数のインスタンス化
     criterion = ContrastiveLoss()                         # 引数として「margin=○○」が指定できる。デフォルト値は「margin=1.0」
 
@@ -228,7 +242,7 @@ def train(model_type):
     # モデル学習
     total_epochs = 100                                                       # 学習回数
     losses = []                                                       # 表示用損失値配列
-
+    
     model.train()                                                     # 学習モード
     for epoch in range(total_epochs): 
         print(f"epoch={epoch+1}")
@@ -267,82 +281,84 @@ def train(model_type):
             # 学習結果に基づきパラメータを更新
             optimizer.step()
 
-    print(f"nan/normal: {nan_count}/{normal_count}")
-    plt.plot(losses)                                                  # loss値の推移を表示
+        print(loss)
+        print(f"nan/normal: {nan_count}/{normal_count}")
+        # plt.plot(losses)                                                  # loss値の推移を表示
+    torch.save(model.state_dict(), 'checkpoints/net2.pth')
 
     # STEP 8
     # モデル評価
     # テスト用DataLoaderの作成（学習用は画像ペアが必要なので後ほど）
-    test_dataset = TestDataset("images")
-    test_loader = DataLoader(
-        test_dataset,                             # データセット
-        batch_size=1,                             # バッチサイズは１なので１画像毎にモデルへ入力
-        shuffle=True                              # データセットからランダムに取り出す
-    )
+    # test_dataset = TestDataset("images")
+    # test_loader = DataLoader(
+    #     test_dataset,                             # データセット
+    #     batch_size=1,                             # バッチサイズは１なので１画像毎にモデルへ入力
+    #     shuffle=True                              # データセットからランダムに取り出す
+    # )
 
-    model.eval()                                                      # 評価モード
-    with torch.no_grad():
-        z_test = []
-        y_test = []       
-        for X, y in test_loader:                                      # テスト用DataLoader     
-            output = model.forward_once(X.to(device))
-            z_test.append(output)           # テストデータをモデルに通して出力ベクトルを得る
-            y_test.append(y)   
-        z_test = torch.cat(z_test, dim=0)                             # 多次元torch.tensor要素のリストをtorch.tensor化
-        y_test = torch.tensor(y_test)                                 # スカラ要素(int)リストをtorch.tensor化
+    # model.eval()                                                      # 評価モード
+    # with torch.no_grad():
+    #     z_test = []
+    #     y_test = []       
+    #     for X, y in test_loader:                                      # テスト用DataLoader     
+    #         output = model.forward_once(X.to(device))
+    #         z_test.append(output)           # テストデータをモデルに通して出力ベクトルを得る
+    #         y_test.append(y)   
+    #     z_test = torch.cat(z_test, dim=0)                             # 多次元torch.tensor要素のリストをtorch.tensor化
+    #     y_test = torch.tensor(y_test)                                 # スカラ要素(int)リストをtorch.tensor化
 
 
-    # STEP 9
-    # from sklearn.manifold import TSNE
+    # # STEP 9
+    # # from sklearn.manifold import TSNE
     
-    def plot_tsne(x, y, colormap=plt.cm.Paired):
-        plt.figure(figsize=(13, 10))
-        plt.clf()
-        tsne = TSNE()
-        x_embedded = tsne.fit_transform(x)
-        # try:
-        #     x_embedded = tsne.fit_transform(x)
-        # except ValueError:
-        #    print("ValueError detected")
-        #    print(x)
-        #    print(np.where(np.isnan(x)))
-        plt.scatter(x_embedded[:, 0], x_embedded[:, 1], c=y, cmap='jet')
-        plt.colorbar()
-        # plt.show()
+    # def plot_tsne(x, y, colormap=plt.cm.Paired):
+    #     plt.figure(figsize=(13, 10))
+    #     plt.clf()
+    #     tsne = TSNE()
+    #     x_embedded = tsne.fit_transform(x)
+    #     # try:
+    #     #     x_embedded = tsne.fit_transform(x)
+    #     # except ValueError:
+    #     #    print("ValueError detected")
+    #     #    print(x)
+    #     #    print(np.where(np.isnan(x)))
+    #     plt.scatter(x_embedded[:, 0], x_embedded[:, 1], c=y, cmap='jet')
+    #     plt.colorbar()
+    #     # plt.show()
 
-    # t-SNEによるベクトル分布表示
-    z_test_np = z_test.to('cpu').detach().numpy().copy()                    # t-SNEはdeviceとしてCPUのみに対応（GPUはダメ）
-    y_test_np = y_test.to('cpu').detach().numpy().copy()
-    plot_tsne(z_test_np, y_test_np)
+    # # t-SNEによるベクトル分布表示
+    # z_test_np = z_test.to('cpu').detach().numpy().copy()                    # t-SNEはdeviceとしてCPUのみに対応（GPUはダメ）
+    # y_test_np = y_test.to('cpu').detach().numpy().copy()
+    # plot_tsne(z_test_np, y_test_np)
 
 
-    # STEP 10
-    # from sklearn.cluster import KMeans
+    # # STEP 10
+    # # from sklearn.cluster import KMeans
 
-    # k-meansによるクラスタリング
-    kmeans = KMeans(n_clusters=3107, n_init=10)                                             # クラスタ数は3107で指定します
-    kmeans.fit(z_test_np)
+    # # k-meansによるクラスタリング
+    # kmeans = KMeans(n_clusters=3107, n_init=10)                                             # クラスタ数は3107で指定します
+    # kmeans.fit(z_test_np)
 
-    # ラベルの付け替え
-    counts = {}
-    for cluster_label, test_label in zip(kmeans.labels_, y_test_np):           # cluster_label：クラスタラベルすなわちその画像の予測の結果，test_label：テスト画像ラベル
-        if cluster_label not in counts.keys():
-            counts[cluster_label] = [0] * 3107                                       # 「<cluster_label>:[0,0,0,0,0,0,0,0,0,0]」をcountsに追加（初期化）
-        counts[cluster_label][test_label] += 1             #　各クラスターで各種類（ラベル、真実）のサンプルの数を記録
+    # # ラベルの付け替え
+    # counts = {}
+    # for cluster_label, test_label in zip(kmeans.labels_, y_test_np):           # cluster_label：クラスタラベルすなわちその画像の予測の結果，test_label：テスト画像ラベル
+    #     if cluster_label not in counts.keys():
+    #         counts[cluster_label] = [0] * 3107                                       # 「<cluster_label>:[0,0,0,0,0,0,0,0,0,0]」をcountsに追加（初期化）
+    #     counts[cluster_label][test_label] += 1             #　各クラスターで各種類（ラベル、真実）のサンプルの数を記録
 
-    mapping = {}      # cluster index -> class index
-    for cluster_label in range(3107):
-        mapping[cluster_label] = counts[cluster_label].index(max(counts[cluster_label])) # クラスターリングされたクラスターで、一番多いラベルのインデックス
-        #   if cluster_label in counts.keys():
-        #     mapping[cluster_label] = counts[cluster_label].index(max(counts[cluster_label])) # クラスターリングされたクラスターで、一番多いラベルのインデックス
-        #   else:
-        #     pass
+    # mapping = {}      # cluster index -> class index
+    # for cluster_label in range(3107):
+    #     mapping[cluster_label] = counts[cluster_label].index(max(counts[cluster_label])) # クラスターリングされたクラスターで、一番多いラベルのインデックス
+    #     #   if cluster_label in counts.keys():
+    #     #     mapping[cluster_label] = counts[cluster_label].index(max(counts[cluster_label])) # クラスターリングされたクラスターで、一番多いラベルのインデックス
+    #     #   else:
+    #     #     pass
 
-    # 正解率の計算
-    mapped_cluster_label = np.array([mapping[cluster_label] for cluster_label in kmeans.labels_])
-    accuracy = sum(mapped_cluster_label == y_test_np) / len(y_test_np)
-    print(accuracy)
-    torch.save(model.state_dict(), 'checkpoints/net2.pth')
+    # # 正解率の計算
+    # mapped_cluster_label = np.array([mapping[cluster_label] for cluster_label in kmeans.labels_])
+    # accuracy = sum(mapped_cluster_label == y_test_np) / len(y_test_np)
+    # print(accuracy)
+    
 
 def trained_model_initialization(model_type):
     if model_type == "net1":
@@ -378,7 +394,9 @@ def generate_labels(file_name, model_type):
         for font_idx in range(7): # 7 kinds of font
             img_tensor_list.append(transform(Image.open(f"images/{utf8code}_{font_idx}.png")))
         img_tensor = torch.sum(torch.cat(img_tensor_list, dim=0), dim=0, keepdim=True)/7
+        # print(img_tensor.tolist())
         output = model.forward_once(img_tensor.unsqueeze(0).to(device)).squeeze(0)
+        print(output)
         output_file.write(" ".join([str(num) for num in output.tolist()]))
         if idx < len(df.index) - 1:
             output_file.write("\n")
@@ -389,7 +407,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--mode", default="train", type=str)
 parser.add_argument("--utf8code", default="", nargs='+')
 parser.add_argument("--model_type", default="net2", type=str)
-parser.add_argument("--file_name", default="label_embedding2.txt", type=str)
+parser.add_argument("--file_name", default="label_embedding3.txt", type=str)
 
 args = parser.parse_args()
 if args.mode == "train":
